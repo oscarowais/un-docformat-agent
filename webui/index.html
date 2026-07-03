@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UN DocFormat Agent</title>
+<style>
+  :root{--blue:#009edb;--ink:#1a2733;--bg:#f4f7f9;--err:#c0392b;--warn:#b9770e;--info:#5d6d7e}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Georgia,'Times New Roman',serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--blue);color:#fff;padding:18px 28px}
+  header h1{margin:0;font-size:22px;font-weight:600}
+  header p{margin:4px 0 0;font-size:13px;opacity:.9}
+  main{max-width:960px;margin:24px auto;padding:0 16px}
+  .card{background:#fff;border:1px solid #dfe6ec;border-radius:8px;padding:20px;margin-bottom:18px}
+  textarea{width:100%;min-height:220px;font-family:'Courier New',monospace;font-size:13px;
+           padding:10px;border:1px solid #ccd6dd;border-radius:6px;resize:vertical}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+  button{font:inherit;padding:9px 22px;border-radius:6px;border:none;cursor:pointer}
+  .primary{background:var(--blue);color:#fff}
+  .primary:disabled,.ai:disabled{opacity:.45;cursor:not-allowed}
+  .ai{background:#2c3e50;color:#fff}
+  input[type=file]{font-size:13px}
+  .summary{display:flex;gap:16px;font-size:14px;margin-bottom:12px}
+  .summary b{font-size:20px;display:block}
+  .finding{border-left:4px solid var(--info);padding:8px 12px;margin:8px 0;background:#fafcfd;font-size:14px}
+  .finding.error{border-color:var(--err)}
+  .finding.warning{border-color:var(--warn)}
+  .finding .rid{font-family:'Courier New',monospace;font-size:12px;color:#7b8a97}
+  .finding .fix{color:#1e6e3c}
+  .finding .snip{font-family:'Courier New',monospace;font-size:12px;background:#eef2f5;
+                 padding:2px 6px;border-radius:4px;display:inline-block;margin-top:4px}
+  .verdict{font-size:16px;font-weight:700;margin:10px 0}
+  .verdict.ok{color:#1e6e3c}.verdict.bad{color:var(--err)}
+  .muted{color:#7b8a97;font-size:13px}
+  #status{font-size:14px;color:#7b8a97}
+</style>
+</head>
+<body>
+<header>
+  <h1>UN DocFormat Agent</h1>
+  <p>Formatting &amp; compliance checker for UN Secretariat reports — DGACM / UN Editorial Manual rule set</p>
+</header>
+<main>
+  <div class="card">
+    <label for="text"><strong>Paste your draft</strong> (or upload a .txt / .md / .docx file)</label>
+    <textarea id="text" placeholder="Paste raw English draft text here…"></textarea>
+    <div class="row">
+      <input type="file" id="file" accept=".txt,.md,.docx">
+      <button class="primary" id="checkBtn">Check compliance</button>
+      <button class="primary" id="formatBtn" title="Apply deterministic fixes and download a UN-formatted Word file">
+        Format &amp; download .docx</button>
+      <button class="ai" id="fixBtn" disabled
+        title="{{ 'Rewrite with AI' if model_ready else 'Available once Fireworks AI is configured (Day 2)' }}">
+        Fix with AI {{ '' if model_ready else '(pending credits)' }}
+      </button>
+      <span id="status"></span>
+    </div>
+  </div>
+  <div class="card" id="results" style="display:none">
+    <div class="summary">
+      <span><b id="nErr">0</b>errors</span>
+      <span><b id="nWarn">0</b>warnings</span>
+      <span><b id="nInfo">0</b>info</span>
+      <span><b id="nWords">0</b>words</span>
+    </div>
+    <div class="verdict" id="verdict"></div>
+    <div id="findings"></div>
+    <p class="muted">Rules source: UN Editorial Manual Online / DGACM Instructions
+       for the Preparation of Official Documents.</p>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+
+$('checkBtn').addEventListener('click', async () => {
+  const fd = new FormData();
+  const file = $('file').files[0];
+  if (file) fd.append('file', file);
+  fd.append('text', $('text').value);
+  $('status').textContent = 'Checking…';
+  try {
+    const res = await fetch('/check', {method: 'POST', body: fd});
+    const data = await res.json();
+    if (!res.ok) { $('status').textContent = data.error || 'Request failed'; return; }
+    render(data);
+    $('status').textContent = '';
+  } catch (e) {
+    $('status').textContent = 'Error: ' + e.message;
+  }
+});
+
+$('formatBtn').addEventListener('click', async () => {
+  const fd = new FormData();
+  const file = $('file').files[0];
+  if (file) fd.append('file', file);
+  fd.append('text', $('text').value);
+  $('status').textContent = 'Formatting…';
+  try {
+    const res = await fetch('/format', {method: 'POST', body: fd});
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      $('status').textContent = data.error || 'Request failed';
+      return;
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'un_formatted_package.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    $('status').textContent =
+      'Downloaded un_formatted_package.zip (formatted .docx + separate change-log .docx)';
+  } catch (e) {
+    $('status').textContent = 'Error: ' + e.message;
+  }
+});
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+function render(data) {
+  $('results').style.display = 'block';
+  $('nErr').textContent = data.summary.errors;
+  $('nWarn').textContent = data.summary.warnings;
+  $('nInfo').textContent = data.summary.info;
+  $('nWords').textContent = data.word_count.toLocaleString();
+  const v = $('verdict');
+  v.textContent = data.summary.compliant ? '✔ Compliant' : '✘ Not compliant';
+  v.className = 'verdict ' + (data.summary.compliant ? 'ok' : 'bad');
+  $('findings').innerHTML = data.findings.map(f => `
+    <div class="finding ${f.severity}">
+      <span class="rid">${esc(f.rule_id)}</span> <strong>${esc(f.rule_name)}</strong>
+      ${f.paragraph_index !== null ? `<span class="rid">· para ${f.paragraph_index + 1}</span>` : ''}
+      <div>${esc(f.message)}</div>
+      ${f.suggestion ? `<div class="fix">Fix: ${esc(f.suggestion)}</div>` : ''}
+      ${f.snippet ? `<span class="snip">${esc(f.snippet)}</span>` : ''}
+    </div>`).join('');
+}
+</script>
+</body>
+</html>

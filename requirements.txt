@@ -1,0 +1,11 @@
+# UN DocFormat Agent — Python dependencies
+# Day 1 scope: rules engine + ingestion + Flask UI skeleton. No model deps yet.
+flask>=3.0
+python-docx>=1.1
+python-dotenv>=1.0
+
+# Day 2+ (uncomment once Fireworks credits are live):
+# fireworks-ai>=0.15
+
+# Dev/test
+pytest>=8.0
