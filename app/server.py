@@ -111,14 +111,25 @@ def format_docx():
 
 @app.post("/fix")
 def fix():
-    """AI rewrite endpoint — disabled until Fireworks is configured (Day 2+)."""
+    """Full agent pipeline: autofix + Fireworks model fix + final re-check."""
     client = FireworksClient()
     if not client.is_configured:
-        return {"error": "AI fix is not available yet — Fireworks credentials "
-                         "pending (hackathon credits land Day 2)."}, 503
-    return {"error": "Not implemented yet (Day 3 milestone)."}, 501
+        return {"error": "AI rewrite is not available yet — Fireworks "
+                         "credentials pending. Deterministic formatting "
+                         "still works via Format & download."}, 503
+    doc, err = _doc_from_request()
+    if err:
+        return {"error": err}, 400
+    from app.agent import process
+    result = process(doc.full_text, client=client)
+    # Fields the shared UI renderer expects alongside the pipeline output:
+    result["source"] = doc.source_path or "(pasted text)"
+    result["word_count"] = len(result["text"].split())
+    return result
 
 
 if __name__ == "__main__":
     # 0.0.0.0 so the containerized app is reachable; debug off by default.
-    app.run(host="0.0.0.0", port=8000)
+    # PORT env respected so free hosts (Render/HF Spaces/etc.) can inject it.
+    import os as _os
+    app.run(host="0.0.0.0", port=int(_os.environ.get("PORT", 8000)))

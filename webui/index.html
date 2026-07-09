@@ -119,8 +119,8 @@
       <button class="btn-format" id="formatBtn"
         title="Apply deterministic fixes; download formatted .docx + separate change-log .docx (zip)">
         Format &amp; download</button>
-      <button class="btn-ai" id="fixBtn" disabled
-        title="{{ 'AI rewrite via Fireworks' if model_ready else 'Available once Fireworks AI credits land (Day 2)' }}">
+      <button class="btn-ai" id="fixBtn" {{ '' if model_ready else 'disabled' }}
+        title="{{ 'Full agent pipeline: autofix + Fireworks model fix (Gemma on AMD Instinct)' if model_ready else 'Available once Fireworks AI credits land' }}">
         <span class="dot"></span>AI rewrite {{ '' if model_ready else '— pending credits' }}</button>
       <span id="status"></span>
     </div>
@@ -187,6 +187,41 @@ $('formatBtn').addEventListener('click', async () => {
     a.click();
     URL.revokeObjectURL(a.href);
     $('status').textContent = 'Downloaded: formatted .docx + change-log .docx (zip)';
+  } catch (e) { $('status').textContent = 'Error: ' + e.message; }
+});
+
+$('fixBtn').addEventListener('click', async () => {
+  if ($('fixBtn').disabled) return;
+  $('status').textContent = 'Running agent (autofix + AI rewrite)…';
+  try {
+    const res = await fetch('/fix', {method:'POST', body: payload()});
+    const data = await res.json();
+    if (!res.ok) { $('status').textContent = data.error || 'Request failed'; return; }
+    // Show the corrected document in the editor and render the change log.
+    $('text').value = data.text;
+    render(data);
+    const log = [
+      ...data.autofix_log.map(e => ({severity:'info', rule_id:'AUTOFIX',
+        rule_name:'Deterministic fix', message:e, suggestion:'', snippet:'',
+        paragraph_index:null})),
+      ...data.model_log.map(e => ({severity:'info', rule_id:'AI-FIX',
+        rule_name:'Model fix (Fireworks)', message:e, suggestion:'', snippet:'',
+        paragraph_index:null})),
+    ];
+    if (log.length) {
+      $('findings').innerHTML =
+        '<div class="finding"><div class="fhead"><span class="fname">Change log ('
+        + log.length + ' fixes applied)</span></div></div>'
+        + log.map(f => `
+        <div class="finding ${f.severity}">
+          <div class="fhead"><span class="rid">${esc(f.rule_id)}</span>
+          <span class="fname">${esc(f.rule_name)}</span></div>
+          <div class="fmsg">${esc(f.message)}</div>
+        </div>`).join('') + $('findings').innerHTML;
+    }
+    $('status').textContent = data.model_error
+      ? 'Model pass failed — deterministic fixes applied (' + data.model_error + ')'
+      : 'Agent pass complete — corrected text loaded in the editor';
   } catch (e) { $('status').textContent = 'Error: ' + e.message; }
 });
 

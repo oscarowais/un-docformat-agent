@@ -21,9 +21,14 @@ in later milestones.
 - ✅ CLI — `python -m app.cli check <file>` and `format <file> -o out.docx`
 - ✅ Web UI — paste/upload → compliance report + "Format & download .docx" (`app/server.py`, `webui/`)
 - ✅ Dockerfile
-- ⏳ Fireworks AI integration — stubbed (`app/model/`), wired in Day 2–3 once
-  hackathon credits land
-- ⏳ RAG Q&A over compiled docs — Day 4
+- ✅ Fireworks AI integration — full client + agent pipeline (`app/model/`,
+  `app/agent.py`), mock-tested end to end; goes live the moment
+  FIREWORKS_API_KEY/FIREWORKS_MODEL are set in .env (no code changes)
+- ✅ Agent pipeline — autofix → rules re-check → model fix (only remaining
+  violations) → final verification, with graceful degradation if the model
+  is unavailable. CLI: `format --ai`; UI: "AI rewrite" button; API: `/fix`
+- ⏳ Q&A over compiled docs — client method ready (`answer_question`),
+  UI wiring Day 4
 
 ## Quick start
 

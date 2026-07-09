@@ -11,12 +11,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import test_autofix  # noqa: E402  (same directory)
+import test_model  # noqa: E402
 import test_rules  # noqa: E402
 
 
 def main() -> int:
     passed, failed = 0, []
-    for module in (test_rules, test_autofix):
+    for module in (test_rules, test_autofix, test_model):
         for name, fn in inspect.getmembers(module, inspect.isfunction):
             if not name.startswith("test_"):
                 continue

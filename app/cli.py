@@ -52,6 +52,9 @@ def main(argv: list[str] | None = None) -> int:
                        help="Output .docx path (default: formatted.docx)")
     p_fmt.add_argument("--no-fix", action="store_true",
                        help="Skip autofixes; just apply page/font formatting")
+    p_fmt.add_argument("--ai", action="store_true",
+                       help="Also run the Fireworks model fix pass "
+                            "(requires FIREWORKS_API_KEY/FIREWORKS_MODEL)")
 
     args = parser.parse_args(argv)
 
@@ -69,7 +72,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "format":
         text = doc.full_text
         change_log: list[str] = []
-        if not args.no_fix:
+        if args.ai and not args.no_fix:
+            from app.agent import process
+            result = process(text)
+            text = result["text"]
+            change_log = (result["autofix_log"]
+                          + [f"[AI] {e}" for e in result["model_log"]])
+            if result["model_error"]:
+                print(f"warning: model pass failed, using autofix only "
+                      f"({result['model_error']})", file=sys.stderr)
+        elif not args.no_fix:
             text, change_log = autofix(text)
 
         out = write_docx(text, args.output)
