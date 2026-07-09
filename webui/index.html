@@ -120,7 +120,7 @@
         title="Apply deterministic fixes; download formatted .docx + separate change-log .docx (zip)">
         Format &amp; download</button>
       <button class="btn-ai" id="fixBtn" {{ '' if model_ready else 'disabled' }}
-        title="{{ 'Full agent pipeline: autofix + Fireworks model fix (Gemma on AMD Instinct)' if model_ready else 'Available once Fireworks AI credits land' }}">
+        title="{{ 'Full agent pipeline: autofix + Fireworks model fix (MiniMax M3 on AMD Instinct)' if model_ready else 'Available once Fireworks AI is configured' }}">
         <span class="dot"></span>AI rewrite {{ '' if model_ready else '— pending credits' }}</button>
       <span id="status"></span>
     </div>
