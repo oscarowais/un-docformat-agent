@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import urllib.error
 import urllib.request
 
 # Base URL is configurable so the same client can hit any OpenAI-compatible
@@ -155,8 +156,18 @@ class FireworksClient:
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            return json.load(resp)
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                return json.load(resp)
+        except urllib.error.HTTPError as e:
+            # Surface the API's own error body — it names the real cause
+            # (bad model id, wrong endpoint, quota, ...), not just the code.
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")[:400]
+            except Exception:
+                pass
+            raise OSError(f"HTTP {e.code} from {_api_url()}: {body}") from e
 
 
 def _extract_json(content: str):

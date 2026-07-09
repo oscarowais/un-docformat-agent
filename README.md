@@ -70,8 +70,13 @@ docker run -p 8000:8000 un-docformat-agent
 ## Configuration
 
 Copy `.env.example` to `.env` and set `FIREWORKS_API_KEY` / `FIREWORKS_MODEL`
-(model id revealed at hackathon kickoff). Without credentials the app runs in
-rules-engine-only mode; the "Fix with AI" action stays disabled.
+(demo uses `accounts/fireworks/models/minimax-m3`, serverless on AMD
+Instinct). Without credentials the app runs in rules-engine-only mode; the
+"AI rewrite" action stays disabled.
+
+The client is model-agnostic: any OpenAI-compatible endpoint works via
+`FIREWORKS_MODEL`/`FIREWORKS_BASE_URL` — including Google's Gemma family on
+a Fireworks dedicated deployment, with zero code changes.
 
 ## Project layout
 

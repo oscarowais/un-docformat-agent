@@ -18,7 +18,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.autofix import autofix
+from dotenv import load_dotenv
+
+load_dotenv()  # .env must be loaded for --ai (FIREWORKS_* variables)
+
+from app.autofix import autofix  # noqa: E402
 from app.ingest import load_document, load_text
 from app.output import write_changelog_docx, write_docx
 from app.report import to_json, to_text
@@ -74,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
         change_log: list[str] = []
         if args.ai and not args.no_fix:
             from app.agent import process
+            from app.model import FireworksClient
+            if not FireworksClient().is_configured:
+                print("warning: --ai requested but FIREWORKS_API_KEY / "
+                      "FIREWORKS_MODEL are not set — AI pass will be "
+                      "skipped (check your .env)", file=sys.stderr)
             result = process(text)
             text = result["text"]
             change_log = (result["autofix_log"]
