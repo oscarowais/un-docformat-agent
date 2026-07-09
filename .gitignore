@@ -1,4 +1,8 @@
 .env
+# generated demo artifacts — don't commit outputs
+formatted*.docx
+f[0-9].docx
+*_changelog.docx
 __pycache__/
 *.pyc
 .pytest_cache/

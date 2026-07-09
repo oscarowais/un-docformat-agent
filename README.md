@@ -1,3 +1,13 @@
+---
+title: UN DocFormat Agent
+emoji: 🇺🇳
+colorFrom: red
+colorTo: blue
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # UN DocFormat Agent
 
 Formatting and compliance agent for UN-style documentation, built for the
