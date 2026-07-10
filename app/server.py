@@ -82,13 +82,19 @@ def check():
 
 @app.post("/format")
 def format_docx():
-    """Deterministic autofix + download. The formatted document and the
-    change log are SEPARATE .docx files, delivered together as a zip
-    (a single HTTP response can't carry two attachments)."""
+    """Deterministic autofix + download package.
+
+    Returns JSON (not a raw file) so the UI can BOTH offer the zip download
+    and mirror the formatted text into the editor: the zip (formatted .docx
+    + change-log .docx — always both) travels base64-encoded.
+    """
+    import base64
+
     doc, err = _doc_from_request()
     if err:
         return {"error": err}, 400
-    fixed, change_log = autofix(doc.full_text)
+    original = doc.full_text
+    fixed, change_log = autofix(original)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         doc_path = Path(tmpdir) / "un_formatted.docx"
@@ -100,20 +106,21 @@ def format_docx():
             change_log or ["No changes required — the document already "
                            "satisfied all mechanical rules."],
             log_path, source=doc.source_path or "(pasted text)")
-        files = [doc_path, log_path]
 
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-            for f in files:
+            for f in (doc_path, log_path):
                 z.write(f, arcname=f.name)
-        buf.seek(0)
 
-    return send_file(
-        buf,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name="un_formatted_package.zip",
-    )
+    return {
+        "text": fixed,
+        "original_text": original,
+        "autofix_log": change_log,
+        "source": doc.source_path or "(pasted text)",
+        "word_count": len(fixed.split()),
+        "filename": "un_formatted_package.zip",
+        "zip_base64": base64.b64encode(buf.getvalue()).decode("ascii"),
+    }
 
 
 @app.post("/fix")

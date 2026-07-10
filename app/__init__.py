@@ -11,4 +11,4 @@ __version__ = "0.1.0"
 #   NNNN     = release counter (increment on every push that changes the app)
 #   YYYYMMDD = date of that push
 # Bump this line as part of each release commit.
-__build__ = "000420260710"
+__build__ = "000520260710"
