@@ -57,8 +57,10 @@ def _doc_from_request():
 
 @app.get("/")
 def index():
+    from app import __build__
     return render_template("index.html",
-                           model_ready=FireworksClient().is_configured)
+                           model_ready=FireworksClient().is_configured,
+                           build=__build__)
 
 
 @app.post("/check")

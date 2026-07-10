@@ -6,3 +6,9 @@ Target document type for the demo: Secretariat report
 """
 
 __version__ = "0.1.0"
+
+# Build stamp shown in the UI footer: NNNN + YYYYMMDD
+#   NNNN     = release counter (increment on every push that changes the app)
+#   YYYYMMDD = date of that push
+# Bump this line as part of each release commit.
+__build__ = "000320260710"
