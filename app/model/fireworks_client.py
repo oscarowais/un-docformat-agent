@@ -103,14 +103,21 @@ class FireworksClient:
         user = (f"DRAFT DOCUMENT:\n---\n{text}\n---\n\n"
                 f"REMAINING VIOLATIONS (JSON):\n"
                 f"{json.dumps(findings, ensure_ascii=False, indent=1)}")
-        content = self._chat([
+        texts = self._chat([
             {"role": "system", "content": _REWRITE_SYSTEM},
             {"role": "user", "content": user},
         ], temperature=0.1)
 
-        data = _extract_json(content)
+        # Reasoning models may interleave thinking with the answer, or put
+        # the answer in a different field — try every returned text.
+        data = None
+        for t in texts:
+            data = _extract_json(_strip_thinking(t))
+            if isinstance(data, dict) and "rewritten" in data:
+                break
         if not isinstance(data, dict) or "rewritten" not in data:
-            raise ValueError(f"Model returned unusable response: {content[:200]}")
+            preview = _strip_thinking(texts[0])[:200] if texts else "(empty)"
+            raise ValueError(f"Model returned unusable response: {preview}")
         data.setdefault("change_log", [])
         return {"rewritten": str(data["rewritten"]),
                 "change_log": [str(e) for e in data["change_log"]]}
@@ -120,10 +127,11 @@ class FireworksClient:
         agent targets fit comfortably in a modern context window)."""
         self._require_configured()
         user = f"DOCUMENT:\n---\n{context}\n---\n\nQUESTION: {question}"
-        return self._chat([
+        texts = self._chat([
             {"role": "system", "content": _QA_SYSTEM},
             {"role": "user", "content": user},
-        ], temperature=0.2).strip()
+        ], temperature=0.2)
+        return _strip_thinking(texts[0]).strip()
 
     # ------------------------------------------------------------ internals
 
@@ -146,16 +154,17 @@ class FireworksClient:
             message = response["choices"][0]["message"]
         except (KeyError, IndexError, TypeError) as e:
             raise ValueError(f"Unexpected API response shape: {e}") from e
-        # Reasoning models (e.g. MiniMax) may return their answer in
-        # "content" with thinking in "reasoning_content" — or, if the
-        # token budget ran out mid-thought, leave "content" empty.
-        content = message.get("content") or message.get("reasoning_content")
-        if not content:
+        # Reasoning models (e.g. MiniMax) may return the answer in "content"
+        # AND/OR thinking in "reasoning_content" — return every non-empty
+        # text so callers can search all of them for the answer.
+        texts = [t for t in (message.get("content"),
+                             message.get("reasoning_content")) if t]
+        if not texts:
             finish = response["choices"][0].get("finish_reason", "?")
             raise ValueError(
                 f"Model returned empty content (finish_reason={finish}) — "
                 "likely token budget exhausted on a long document.")
-        return content
+        return texts
 
     def _http_transport(self, payload: dict) -> dict:
         req = urllib.request.Request(
@@ -179,6 +188,14 @@ class FireworksClient:
             except Exception:
                 pass
             raise OSError(f"HTTP {e.code} from {_api_url()}: {body}") from e
+
+
+_THINK_BLOCK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+
+
+def _strip_thinking(text: str) -> str:
+    """Remove <think>...</think> blocks some reasoning models emit inline."""
+    return _THINK_BLOCK.sub("", text)
 
 
 def _extract_json(content: str):

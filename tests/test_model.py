@@ -69,6 +69,23 @@ def test_rewrite_rejects_garbage_response():
         pass
 
 
+def test_thinking_prose_before_json_is_handled():
+    """Reasoning models often narrate before the JSON — extraction must
+    find the answer anyway (the exact failure seen in live testing)."""
+    reply = ("Let me analyze the document and the violation. The violation "
+             "is about paragraph numbering coverage.\n\n"
+             + json.dumps({"rewritten": "1. Fixed.", "change_log": ["x"]}))
+    out = make_client(reply).rewrite_to_comply("draft", [])
+    assert out["rewritten"] == "1. Fixed."
+
+
+def test_think_tags_stripped():
+    reply = ("<think>internal musing here</think>"
+             + json.dumps({"rewritten": "ok", "change_log": []}))
+    out = make_client(reply).rewrite_to_comply("draft", [])
+    assert out["rewritten"] == "ok"
+
+
 def test_reasoning_content_fallback():
     """MiniMax-style responses may omit 'content'; fall back gracefully."""
     def transport(payload):
