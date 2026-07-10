@@ -69,6 +69,28 @@ def test_rewrite_rejects_garbage_response():
         pass
 
 
+def test_reasoning_content_fallback():
+    """MiniMax-style responses may omit 'content'; fall back gracefully."""
+    def transport(payload):
+        return {"choices": [{"message": {"reasoning_content":
+                json.dumps({"rewritten": "ok", "change_log": []})}}]}
+    client = FireworksClient(transport=transport)
+    out = client.rewrite_to_comply("draft", [])
+    assert out["rewritten"] == "ok"
+
+
+def test_empty_content_gives_clear_error():
+    def transport(payload):
+        return {"choices": [{"message": {"content": ""},
+                             "finish_reason": "length"}]}
+    client = FireworksClient(transport=transport)
+    try:
+        client.rewrite_to_comply("draft", [])
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "finish_reason=length" in str(e)
+
+
 def test_answer_question():
     client = make_client("It is covered in paragraph 2.")
     ans = client.answer_question("Where is the budget covered?", "1. ...")

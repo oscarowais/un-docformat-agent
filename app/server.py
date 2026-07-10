@@ -69,6 +69,9 @@ def check():
     findings = run_checks(doc)
     return {
         "source": doc.source_path or "(pasted text)",
+        # extracted text so the UI can show exactly what was checked
+        # (critical for uploaded files — the editor mirrors the document)
+        "text": doc.full_text,
         "word_count": doc.word_count(),
         "summary": summarize(findings),
         "findings": [f.to_dict() for f in sort_findings(findings)],
@@ -88,12 +91,14 @@ def format_docx():
     with tempfile.TemporaryDirectory() as tmpdir:
         doc_path = Path(tmpdir) / "un_formatted.docx"
         write_docx(fixed, doc_path)
-        files = [doc_path]
-        if change_log:
-            log_path = Path(tmpdir) / "change_log.docx"
-            write_changelog_docx(change_log, log_path,
-                                 source=doc.source_path or "(pasted text)")
-            files.append(log_path)
+        # ALWAYS include the change log — an explicit "0 changes" document
+        # beats a silently missing file.
+        log_path = Path(tmpdir) / "change_log.docx"
+        write_changelog_docx(
+            change_log or ["No changes required — the document already "
+                           "satisfied all mechanical rules."],
+            log_path, source=doc.source_path or "(pasted text)")
+        files = [doc_path, log_path]
 
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -125,6 +130,8 @@ def fix():
     # Fields the shared UI renderer expects alongside the pipeline output:
     result["source"] = doc.source_path or "(pasted text)"
     result["word_count"] = len(result["text"].split())
+    # Pre-pipeline text so the UI's "Restore source" works for uploads too.
+    result["original_text"] = doc.full_text
     return result
 
 

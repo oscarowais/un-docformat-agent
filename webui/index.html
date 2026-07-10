@@ -122,6 +122,8 @@
       <button class="btn-ai" id="fixBtn" {{ '' if model_ready else 'disabled' }}
         title="{{ 'Full agent pipeline: autofix + Fireworks model fix (MiniMax M3 on AMD Instinct)' if model_ready else 'Available once Fireworks AI is configured' }}">
         <span class="dot"></span>AI rewrite {{ '' if model_ready else '— pending credits' }}</button>
+      <button class="btn-ai" id="restoreBtn" style="display:none"
+        title="Bring back the draft as it was before the AI rewrite">Restore source</button>
       <span id="status"></span>
     </div>
   </section>
@@ -149,6 +151,8 @@
 
 <script>
 const $ = id => document.getElementById(id);
+let originalDraft = null;   // pre-AI-rewrite draft, for "Restore source"
+let busyTimer = null;
 
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
@@ -157,27 +161,60 @@ function payload(){
   const file = $('file').files[0];
   if (file) fd.append('file', file);
   fd.append('text', $('text').value);
-  return fd;
+  return { fd, hadFile: !!file, fileName: file ? file.name : null };
+}
+
+// Busy state: disable actions + animate the status so long AI calls
+// never look like a frozen page.
+function setBusy(msg){
+  ['checkBtn','formatBtn','fixBtn'].forEach(id => $(id).disabled = true);
+  let dots = 0;
+  $('status').textContent = msg;
+  busyTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    $('status').textContent = msg + '.'.repeat(dots);
+  }, 500);
+}
+function clearBusy(finalMsg){
+  clearInterval(busyTimer); busyTimer = null;
+  $('checkBtn').disabled = false;
+  $('formatBtn').disabled = false;
+  $('fixBtn').disabled = {{ 'false' if model_ready else 'true' }};
+  $('status').textContent = finalMsg || '';
+}
+
+// After a file-based action, mirror the extracted document into the editor
+// so everyone can see exactly what was checked.
+function adoptText(data, hadFile){
+  if (hadFile && data.text !== undefined) {
+    $('text').value = data.text;
+    $('file').value = '';
+  }
 }
 
 $('checkBtn').addEventListener('click', async () => {
-  $('status').textContent = 'Checking…';
+  const p = payload();
+  setBusy('Checking' + (p.fileName ? ' ' + p.fileName : ''));
   try {
-    const res = await fetch('/check', {method:'POST', body: payload()});
+    const res = await fetch('/check', {method:'POST', body: p.fd});
     const data = await res.json();
-    if (!res.ok) { $('status').textContent = data.error || 'Request failed'; return; }
+    if (!res.ok) { clearBusy(data.error || 'Request failed'); return; }
+    adoptText(data, p.hadFile);
     render(data);
-    $('status').textContent = '';
-  } catch (e) { $('status').textContent = 'Error: ' + e.message; }
+    clearBusy(p.hadFile
+      ? 'Checked ' + (p.fileName || 'file') + ' — extracted text loaded in the editor'
+      : '');
+  } catch (e) { clearBusy('Error: ' + e.message); }
 });
 
 $('formatBtn').addEventListener('click', async () => {
-  $('status').textContent = 'Formatting…';
+  const p = payload();
+  setBusy('Formatting');
   try {
-    const res = await fetch('/format', {method:'POST', body: payload()});
+    const res = await fetch('/format', {method:'POST', body: p.fd});
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      $('status').textContent = data.error || 'Request failed';
+      clearBusy(data.error || 'Request failed');
       return;
     }
     const blob = await res.blob();
@@ -186,17 +223,34 @@ $('formatBtn').addEventListener('click', async () => {
     a.download = 'un_formatted_package.zip';
     a.click();
     URL.revokeObjectURL(a.href);
-    $('status').textContent = 'Downloaded: formatted .docx + change-log .docx (zip)';
-  } catch (e) { $('status').textContent = 'Error: ' + e.message; }
+    clearBusy('Downloaded zip: un_formatted.docx (compliant document) + '
+      + 'change_log.docx (every fix applied — always included)');
+  } catch (e) { clearBusy('Error: ' + e.message); }
+});
+
+$('restoreBtn').addEventListener('click', () => {
+  if (originalDraft !== null) {
+    $('text').value = originalDraft;
+    originalDraft = null;
+    $('restoreBtn').style.display = 'none';
+    $('status').textContent = 'Original draft restored.';
+  }
 });
 
 $('fixBtn').addEventListener('click', async () => {
   if ($('fixBtn').disabled) return;
-  $('status').textContent = 'Running agent (autofix + AI rewrite)…';
+  const p = payload();
+  const draftBefore = $('text').value;
+  setBusy('Running agent — autofix, then AI rewrite on AMD (can take ~30-60s)');
   try {
-    const res = await fetch('/fix', {method:'POST', body: payload()});
+    const res = await fetch('/fix', {method:'POST', body: p.fd});
     const data = await res.json();
-    if (!res.ok) { $('status').textContent = data.error || 'Request failed'; return; }
+    if (!res.ok) { clearBusy(data.error || 'Request failed'); return; }
+    // Keep the pre-rewrite draft so it can be restored for comparison.
+    originalDraft = (data.original_text !== undefined && p.hadFile)
+      ? data.original_text : draftBefore;
+    $('restoreBtn').style.display = '';
+    $('file').value = '';
     // Show the corrected document in the editor and render the change log.
     $('text').value = data.text;
     render(data);
@@ -219,10 +273,11 @@ $('fixBtn').addEventListener('click', async () => {
           <div class="fmsg">${esc(f.message)}</div>
         </div>`).join('') + $('findings').innerHTML;
     }
-    $('status').textContent = data.model_error
+    clearBusy(data.model_error
       ? 'Model pass failed — deterministic fixes applied (' + data.model_error + ')'
-      : 'Agent pass complete — corrected text loaded in the editor';
-  } catch (e) { $('status').textContent = 'Error: ' + e.message; }
+      : 'Agent pass complete — corrected text in the editor. '
+        + '"Restore source" brings back the original.');
+  } catch (e) { clearBusy('Error: ' + e.message); }
 });
 
 function render(data){

@@ -138,13 +138,24 @@ class FireworksClient:
             "model": self.model or "mock-model",
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": 8192,
+            # generous ceiling: long documents + reasoning-model overhead
+            "max_tokens": 32768,
         }
         response = self._transport(payload)
         try:
-            return response["choices"][0]["message"]["content"]
+            message = response["choices"][0]["message"]
         except (KeyError, IndexError, TypeError) as e:
             raise ValueError(f"Unexpected API response shape: {e}") from e
+        # Reasoning models (e.g. MiniMax) may return their answer in
+        # "content" with thinking in "reasoning_content" — or, if the
+        # token budget ran out mid-thought, leave "content" empty.
+        content = message.get("content") or message.get("reasoning_content")
+        if not content:
+            finish = response["choices"][0].get("finish_reason", "?")
+            raise ValueError(
+                f"Model returned empty content (finish_reason={finish}) — "
+                "likely token budget exhausted on a long document.")
+        return content
 
     def _http_transport(self, payload: dict) -> dict:
         req = urllib.request.Request(

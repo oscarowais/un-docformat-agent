@@ -77,6 +77,11 @@ ACRONYM_IGNORE: set[str] = {
     "AND", "OF", "THE", "FOR", "ON", "IN", "TO", "BY", "AT",
     # ISO currency codes (handled by the currency rule instead)
     "USD", "EUR", "CHF", "GBP", "JPY",
+    # everyday technical/document terms — not abbreviations needing expansion
+    "README", "API", "APIS", "HTTP", "HTTPS", "URL", "URI", "JSON", "XML",
+    "HTML", "CSS", "PDF", "DOCX", "PPTX", "XLSX", "CSV", "FAQ", "GPU",
+    "CPU", "RAM", "SSD", "SDK", "CLI", "IDE", "AI", "ML", "LLM", "RAG",
+    "MIT", "ISO", "ASCII", "UTF",
 }
 
 # --- Oxford/UN spelling ------------------------------------------------------

@@ -109,6 +109,29 @@ def test_autofix_resolves_sample_mechanical_issues():
         assert resolved not in remaining, remaining
 
 
+def test_markdown_normalization():
+    from app.ingest.loaders import normalize_markdown
+    md = ("# Title Here\n\n"
+          "Some **bold** and *emphasis* and `code` and ***both***.\n\n"
+          "- first item\n* second item\n\n"
+          "A [link text](https://example.com) inline.\n\n---\n")
+    out = normalize_markdown(md)
+    assert "#" not in out and "**" not in out and "`" not in out
+    assert "bold" in out and "emphasis" in out and "both" in out
+    assert "first item" in out and "second item" in out
+    assert "link text" in out and "example.com" not in out
+    assert "---" not in out
+
+
+def test_readme_and_tech_terms_not_flagged():
+    from app.rules import checks_terminology
+    from app.ingest import load_text
+    doc = load_text("See the README for the API and the JSON output. "
+                    "The MIT licence and PDF export are described there.")
+    rids = {f.rule_id for f in checks_terminology.check_abbreviations(doc)}
+    assert "UN-ABB-003" not in rids
+
+
 def test_docx_writer_produces_valid_un_formatted_file():
     import tempfile
     out = Path(tempfile.mkdtemp()) / "test_out.docx"

@@ -15,6 +15,33 @@ from app.document import DocumentModel, Paragraph
 _EMU_PER_INCH = 914_400  # python-docx lengths are EMU-backed
 
 
+_MD_EMPHASIS = re.compile(r"(\*\*\*|\*\*|\*|___|__|_|`)(?=\S)(.+?)(?<=\S)\1")
+_MD_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
+_MD_BULLET = re.compile(r"^(\s*)[-*+]\s+", re.MULTILINE)
+_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_MD_RULE = re.compile(r"^\s{0,3}([-*_])\s*(?:\1\s*){2,}$", re.MULTILINE)
+
+
+def normalize_markdown(text: str) -> str:
+    """Reduce Markdown source to clean plain text for compliance checking.
+
+    Markers (#, **, *, _, `, [](), ---) are content noise for the UN rule
+    set — strip them so the checks see prose, not syntax. NOTE: inline
+    styling (bold/italic) is intentionally dropped, not converted — rich
+    inline formatting in the .docx output is out of demo scope.
+    """
+    text = _MD_RULE.sub("", text)
+    text = _MD_HEADING.sub("", text)
+    text = _MD_BULLET.sub(r"\1", text)
+    text = _MD_LINK.sub(r"\1", text)
+    # emphasis can nest (***x***) — apply until stable
+    prev = None
+    while prev != text:
+        prev = text
+        text = _MD_EMPHASIS.sub(r"\2", text)
+    return text
+
+
 def load_text(text: str, source_format: str = "raw") -> DocumentModel:
     """Split raw text into paragraphs. Blank-line separation preferred;
     falls back to single newlines if the text has no blank lines."""
@@ -116,8 +143,10 @@ def load_document(path: str | Path) -> DocumentModel:
     if suffix == ".docx":
         return _load_docx(path)
     if suffix in {".txt", ".md", ""}:
-        doc = load_text(path.read_text(encoding="utf-8"),
-                        source_format=suffix.lstrip(".") or "txt")
+        raw = path.read_text(encoding="utf-8")
+        if suffix == ".md":
+            raw = normalize_markdown(raw)
+        doc = load_text(raw, source_format=suffix.lstrip(".") or "txt")
         doc.source_path = str(path)
         return doc
     raise ValueError(f"Unsupported file type: {suffix} "
