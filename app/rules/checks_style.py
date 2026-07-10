@@ -22,11 +22,15 @@ _ISE = re.compile(r"\b([A-Za-z]{3,})(ise|ised|ising|isation|isations)\b")
 # Single-quoted span of reasonable length (avoid apostrophes/contractions).
 _SINGLE_QUOTE = re.compile(r"(?<![A-Za-z])'([^'\n]{2,120})'(?![A-Za-z])")
 # Standalone small digits: not part of larger numbers, decimals, refs, dates,
-# percentages, currency, paragraph citations, or list numbering.
-_SMALL_DIGIT = re.compile(r"(?<![\d.,/($€£-])\b([1-9])\b(?![\d.,:%/)-])")
+# ranges (en/em dash), product codes ("Ryzen 9 9950X"), inch marks,
+# percentages, currency, citations, or list numbering.
+_SMALL_DIGIT = re.compile(
+    r"(?<![\d.,/($€£–—-])\b([1-9])\b(?![\d.,:%/)–—\"-])(?!\s+\d)")
 _CITE_BEFORE = re.compile(
     r"(paragraph|paragraphs|para\.|sect\.|section|chapter|article|resolution"
-    r"|annex|table|figure|page|item|goal|rule|decision|part)\s*$",
+    r"|annex|table|figure|page|item|goal|rule|decision|part|day|track|step"
+    r"|phase|version|no\.|january|february|march|april|may|june|july|august"
+    r"|september|october|november|december)\s*:?\s*$",
     re.IGNORECASE)
 _ORDINAL_NUM = re.compile(r"\b([1-9]\d?)(st|nd|rd|th)\b")
 _CURRENCY_CODE = re.compile(r"\b(USD|EUR|CHF)\s?([\d,.]+)\b")

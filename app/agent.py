@@ -50,14 +50,27 @@ def process(text: str, use_model: bool = True,
 
     # 3. model pass — only if something remains and a model is available
     if use_model and remaining and client.is_configured:
+        before = summarize(run_checks(load_text(fixed)))
         try:
             result = client.rewrite_to_comply(
                 fixed, [f.to_dict() for f in remaining])
             candidate = result["rewritten"].strip()
             if candidate:
-                fixed = candidate
-                model_log = result["change_log"]
-                model_used = True
+                # REGRESSION GUARD: never accept a rewrite that makes
+                # compliance worse than the deterministic result.
+                after = summarize(run_checks(load_text(candidate)))
+                if (after["errors"], after["warnings"]) <= \
+                        (before["errors"], before["warnings"]):
+                    fixed = candidate
+                    model_log = result["change_log"]
+                    model_used = True
+                else:
+                    model_error = (
+                        f"Model output rejected by verification: it would "
+                        f"have changed compliance from {before['errors']} "
+                        f"error(s)/{before['warnings']} warning(s) to "
+                        f"{after['errors']}/{after['warnings']}. Kept the "
+                        f"deterministic result.")
         except (ModelNotConfigured, ValueError, OSError) as e:
             # Degrade gracefully: keep the autofixed text, surface the error.
             model_error = str(e)

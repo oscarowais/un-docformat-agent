@@ -59,7 +59,15 @@ Requirements:
 1. Fix ONLY the listed violations. Do not rewrite, shorten, embellish or
    otherwise alter content that is not flagged.
 2. Preserve the meaning, facts, figures and citations of the original.
-3. Return STRICT JSON, nothing else, in exactly this shape:
+3. NEVER renumber section headings or convert headings/list items into
+   numbered paragraphs — paragraph-numbering fixes apply only to body
+   paragraphs of running prose.
+4. NEVER alter text inside quotation marks: quoted material is verbatim.
+5. NEVER change numbers that belong to dates, product or model names,
+   versions, or references such as "Day 2", "Track 3", "Section 5".
+6. If a flagged violation cannot be fixed without breaking rules 1-5,
+   leave it unchanged and add a change_log entry saying why.
+7. Return STRICT JSON, nothing else, in exactly this shape:
    {{"rewritten": "<full corrected document text>",
      "change_log": ["<one entry per fix, format: 'Rule: what changed'>"]}}
 """

@@ -158,6 +158,20 @@ def test_pipeline_with_mock_model_fixes_remaining():
     assert result["text"].startswith("I. Introduction")
 
 
+def test_regression_guard_rejects_worse_rewrite():
+    """If the model's rewrite scores WORSE than the deterministic result,
+    the pipeline must keep the deterministic text (live-testing bug:
+    2 warnings before AI pass became 9 errors after)."""
+    worse = ("I. INTRODUCTION IN SHOUTING CAPS\n\n"
+             "3. A paragraph numbered wrongly out of sequence in Vietnam.\n\n"
+             "7. Another with USD 500 and 'single quotes' and organise.")
+    reply = json.dumps({"rewritten": worse, "change_log": ["made it worse"]})
+    result = process(SAMPLE, client=make_client(reply))
+    assert result["model_used"] is False
+    assert "rejected by verification" in (result["model_error"] or "")
+    assert "Viet Nam" in result["text"]        # deterministic result kept
+
+
 def test_pipeline_degrades_when_model_fails():
     def broken_transport(payload):
         raise OSError("network unreachable")

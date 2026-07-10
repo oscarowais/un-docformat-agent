@@ -109,6 +109,30 @@ def test_autofix_resolves_sample_mechanical_issues():
         assert resolved not in remaining, remaining
 
 
+def test_quoted_material_is_verbatim():
+    """Text inside double quotes must never be edited (live-testing bug:
+    '"programme" not "program"' was mangled into nonsense)."""
+    fixed, _ = autofix('Spelling per Oxford (e.g. "programme" not "program", '
+                       '"judgement" not "judgment").')
+    assert '"program"' in fixed and '"judgment"' in fixed
+
+
+def test_technical_numbers_untouched():
+    """Product codes, dates, ranges and references keep their digits."""
+    src = ("Track: 3 — built on a Ryzen 9 9950X during July 6–11, "
+           "see Day 2 and version 5 notes.")
+    fixed, log = autofix(src)
+    assert "Ryzen 9 9950X" in fixed
+    assert "July 6–11" in fixed
+    assert "Track: 3" in fixed
+    assert "Day 2" in fixed and "version 5" in fixed
+
+
+def test_prose_numbers_still_fixed():
+    fixed, _ = autofix("The mission received 5 new mandates.")
+    assert "five new mandates" in fixed
+
+
 def test_markdown_normalization():
     from app.ingest.loaders import normalize_markdown
     md = ("# Title Here\n\n"

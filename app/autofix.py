@@ -23,12 +23,20 @@ from app.rules.vocab import (ISE_EXCEPTIONS, KNOWN_ACRONYMS, NEVER_ABBREVIATE,
 
 _ISE = re.compile(r"\b([A-Za-z]{3,})(ise|ised|ising|isation|isations)\b")
 _SINGLE_QUOTE = re.compile(r"(?<![A-Za-z])'([^'\n]{2,120})'(?![A-Za-z])")
-_SMALL_DIGIT = re.compile(r"(?<![\d.,/($€£-])\b([1-9])\b(?![\d.,:%/)-])")
+# guards: not adjacent to digits/currency, not before dashes (ranges),
+# not before a following number token (product codes: "Ryzen 9 9950X"),
+# not before an inch mark
+_SMALL_DIGIT = re.compile(
+    r"(?<![\d.,/($€£–—-])\b([1-9])\b(?![\d.,:%/)–—\"-])(?!\s+\d)")
 _CITE_BEFORE = re.compile(
     r"(paragraph|paragraphs|para\.|sect\.|section|chapter|article|resolution"
-    r"|annex|table|figure|page|item|goal|rule|decision|part)\s*$",
+    r"|annex|table|figure|page|item|goal|rule|decision|part|day|track|step"
+    r"|phase|version|no\.|january|february|march|april|may|june|july|august"
+    r"|september|october|november|december)\s*:?\s*$",
     re.IGNORECASE)
 _ORDINAL_NUM = re.compile(r"\b([1-9])(st|nd|rd|th)\b")
+# double-quoted spans are verbatim material — never edited
+_DQ_SPAN = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”")
 _CURRENCY_CODE = re.compile(r"\b(USD|EUR|CHF)\s?([\d,.]+)\b")
 _SUB_MARKER = re.compile(r"(^|\n)(\s*)([a-z])\)\s", re.MULTILINE)
 _CURRENCY_SYMBOL = {"USD": "$", "EUR": "€", "CHF": "SwF"}
@@ -221,6 +229,24 @@ def _renumber_paragraphs(lines: list[str], log: list[str]) -> list[str]:
     return out
 
 
+def _mask_quoted(text: str) -> tuple[str, list[str]]:
+    """Replace double-quoted spans with placeholders. Quoted material is
+    verbatim — an editor never rewrites the inside of a quotation."""
+    spans: list[str] = []
+
+    def repl(m: re.Match) -> str:
+        spans.append(m.group(0))
+        return f"\x00Q{len(spans) - 1}\x00"
+
+    return _DQ_SPAN.sub(repl, text), spans
+
+
+def _unmask_quoted(text: str, spans: list[str]) -> str:
+    for i, s in enumerate(spans):
+        text = text.replace(f"\x00Q{i}\x00", s)
+    return text
+
+
 def autofix(text: str) -> tuple[str, list[str]]:
     """Apply all deterministic fixes; return (fixed_text, change_log)."""
     log: list[str] = []
@@ -231,14 +257,20 @@ def autofix(text: str) -> tuple[str, list[str]]:
     lines = _renumber_paragraphs(lines, log)
     text = "\n".join(lines)
 
+    # Normalize quotation marks FIRST, then protect everything inside
+    # double quotes from all subsequent text-level fixes.
+    text = _fix_quotes(text, log)
+    text, quoted = _mask_quoted(text)
+
     text = _fix_never_abbreviate(text, log)
     text = _fix_first_use_acronyms(text, log)
     text = _fix_countries(text, log)
     text = _fix_spelling(text, log)
     text = _fix_ise(text, log)
     text = _fix_currency(text, log)
-    text = _fix_quotes(text, log)
     text = _fix_numbers(text, log)
+
+    text = _unmask_quoted(text, quoted)
     text = _fix_sub_markers(text, log)
     text = _fix_nested_indent(text, log)
     return text, log
